@@ -10,17 +10,21 @@ dataset_path = "MakalahAlgeo/dataset"
 if os.path.exists(dataset_path):
     print("Dataset path is valid.")
 else:
-    print("Dataset path is invalid.")
-
+    print("err: Dataset path is invalid.")
+    exit()
 
 output_dir = "output" 
 os.makedirs(output_dir, exist_ok=True)
 
 audio_files = [f for f in os.listdir(dataset_path) if f.endswith('.mp3') or f.endswith('.wav')]
-for idx, audio_file in enumerate(audio_files[:400]): #400 Files
+cumulative_spectrogram = None
+file_count = 0
+target_shape = None
+
+for idx, audio_file in enumerate(audio_files[:400]): # 400 Files
     file_path = os.path.join(dataset_path, audio_file)
 
-    print(f"Processing file {idx + 1}/{min(10, len(audio_files))}: {audio_file}")
+    print(f"Processing file {idx + 1}/{len(audio_files[:400])}: {audio_file}")
 
     # Load Audio
     audio, sr = librosa.load(file_path, sr=16000, mono=True)
@@ -30,9 +34,17 @@ for idx, audio_file in enumerate(audio_files[:400]): #400 Files
     hop_length = 512
     spectrogram = np.abs(librosa.stft(audio, n_fft=n_fft, hop_length=hop_length))
 
+    # Determine the target shape for the spectrogram
+    if target_shape is None:
+        target_shape = spectrogram.shape
+
+    # Resize or pad the spectrogram to match the target shape
+    padded_spectrogram = np.zeros(target_shape)
+    padded_spectrogram[:spectrogram.shape[0], :spectrogram.shape[1]] = spectrogram
+
     # Original Spectrogram
     plt.figure(figsize=(10, 6))
-    librosa.display.specshow(librosa.amplitude_to_db(spectrogram, ref=np.max), sr=sr, hop_length=hop_length, x_axis='time', y_axis='hz')
+    librosa.display.specshow(librosa.amplitude_to_db(padded_spectrogram, ref=np.max), sr=sr, hop_length=hop_length, x_axis='time', y_axis='hz')
     plt.colorbar(label="Amplitude (dB)")
     plt.title(f"Original Spectrogram: {audio_file}")
     plt.xlabel("Time")
@@ -41,7 +53,7 @@ for idx, audio_file in enumerate(audio_files[:400]): #400 Files
     plt.close()
 
     # Apply Singular Value Decomposition (SVD)
-    U, sigma, VT = np.linalg.svd(spectrogram, full_matrices=False)
+    U, sigma, VT = np.linalg.svd(padded_spectrogram, full_matrices=False)
 
     # Threshold Singular Values
     threshold = 0.1 * np.max(sigma)  # retain only dominant singular values
@@ -68,5 +80,32 @@ for idx, audio_file in enumerate(audio_files[:400]): #400 Files
     sf.write(output_audio_file, reconstructed_audio, sr)
 
     print(f"Saved results for {audio_file}")
+
+    # Add to cumulative spectrogram
+    if cumulative_spectrogram is None:
+        cumulative_spectrogram = padded_spectrogram
+    else:
+        cumulative_spectrogram += padded_spectrogram
+
+    file_count += 1
+
+# Compute Average Spectrogram
+if cumulative_spectrogram is not None and file_count > 0:
+    average_spectrogram = cumulative_spectrogram / file_count
+
+    # Plot and Save Average Spectrogram
+    plt.figure(figsize=(10, 6))
+    librosa.display.specshow(librosa.amplitude_to_db(average_spectrogram, ref=np.max),
+        sr=sr, hop_length=hop_length, x_axis='time', y_axis='hz')
+    plt.colorbar(label="Amplitude (dB)")
+    plt.title("Average Spectrogram of Dataset")
+    plt.xlabel("Time")
+    plt.ylabel("Frequency")
+    plt.savefig(os.path.join(output_dir, "Average_Spectrogram.png"))
+    plt.close()
+
+    print("Average spectrogram saved to:", os.path.join(output_dir, "Average_Spectrogram.png"))
+else:
+    print("err: no files processed.")
 
 print("Processing complete. Results saved to:", output_dir)
