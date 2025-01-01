@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import soundfile as sf
 
 # Set Dataset Path
-dataset_path = "MakalahAlgeo/dataset"
+dataset_path = "src/dataset"
 if os.path.exists(dataset_path):
     print("Dataset path is valid.")
 else:
@@ -89,7 +89,6 @@ for idx, audio_file in enumerate(audio_files[:400]): # 400 Files
 
     file_count += 1
 
-# Compute Average Spectrogram
 if cumulative_spectrogram is not None and file_count > 0:
     average_spectrogram = cumulative_spectrogram / file_count
 
